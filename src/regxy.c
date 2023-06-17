@@ -9,7 +9,7 @@
 #define PrintRange(s, start, end) {for (int _I = ((start >= 0) ? start : 0); _I < end && s[_I]; _I++) fputc(s[_I], stdout); fputc('\n', stdout);}
 
 int main(void){
-    char* cont = fread_all("words_alpha.txt");
+    char* cont = fread_all("testdata/words_alpha.txt");
     char* r_cont = NULL;
 
     // // Test naive string replacement
@@ -29,16 +29,6 @@ int main(void){
     // fwrite(cont, sizeof(char), strlen(cont), fp);
     // fclose(fp);
     // free(fp);
-
-    SChunk* sc = str2schunk(cont);
-    int thing = 0;
-    for (int i = 0; i < strlen(cont); i++){
-        thing += get_char(sc, i);
-        // thing += cont[i];
-        thing %= 10;
-    }
-    printf("\n");
-    free(sc);
 
     free(cont);
     return 0;
