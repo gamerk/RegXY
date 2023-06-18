@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <stddef.h>
+#include <time.h>
 #include "strrepl.h"
 
 #define ASSERT_NOT(cond, fmt, ...) if(cond) {fprintf(stderr, fmt, __VA_ARGS__); exit(EXIT_FAILURE);}
@@ -49,7 +51,7 @@ char* str_replaced(const char* s, size_t start, size_t end, const char* repl){
     return new_s;
 }
 
-char* str_multi_replace(const char* s, Repl repls[], size_t count){
+char* str_multi_replace(const char* s, Repl repls[], size_t count, int is_sorted){
     // Ranges cannot overlap
     
     ASSERT_NOT(!s, "Cannot multi-replace on an empty string", NULL);
@@ -58,38 +60,44 @@ char* str_multi_replace(const char* s, Repl repls[], size_t count){
     int offset = 0;
     Repl** ordered = (Repl**)calloc(count, sizeof(Repl*));
 
-    size_t min_start = SIZE_MAX;
-    for (int i = 0; i < count; i++){
-        if (repls[i].start < min_start){
-            min_start = repls[i].start;
-            ordered[0] = &repls[i];
-        }
-    }
 
-    for (int j = 0; j < count - 1; j++){
-        // Shift current min start range by current offset
-        // ordered[j]->start += offset;
-        // ordered[j]->end += offset;
-
-        // Calculate new offset
-        offset += strlen(ordered[j]->repl) - (ordered[j]->end - ordered[j]->start);
-
-        min_start = SIZE_MAX;
+    if (!is_sorted){
+        size_t min_start = SIZE_MAX;
         for (int i = 0; i < count; i++){
-
-            if (&repls[i] == ordered[j]) continue;
-
-            ASSERT_NOT(repls[i].start < ordered[j]->end && repls[i].end > ordered[j]->start, 
-                    "Replacements cannot overlap: (%d-%d -> '%s') and (%d-%d -> '%s')", 
-                    repls[i].start, repls[i].end, repls[i].repl,
-                    ordered[j]->start, ordered[j]->end, ordered[j]->repl);
-
-            if (ordered[j]->start < repls[i].start && repls[i].start < min_start){
+            if (repls[i].start < min_start){
                 min_start = repls[i].start;
-                ordered[j + 1] = &repls[i];
+                ordered[0] = &repls[i];
             }
         }
+
+        for (int j = 0; j < count - 1; j++){
+
+            // Calculate new offset
+            offset += strlen(ordered[j]->repl) - (ordered[j]->end - ordered[j]->start);
+
+            min_start = SIZE_MAX;
+            for (int i = 0; i < count; i++){
+
+                if (&repls[i] == ordered[j]) continue;
+
+                ASSERT_NOT(repls[i].start < ordered[j]->end && repls[i].end > ordered[j]->start, 
+                        "Replacements cannot overlap: (%d-%d -> '%s') and (%d-%d -> '%s')", 
+                        repls[i].start, repls[i].end, repls[i].repl,
+                        ordered[j]->start, ordered[j]->end, ordered[j]->repl);
+
+                if (ordered[j]->start < repls[i].start && repls[i].start < min_start){
+                    min_start = repls[i].start;
+                    ordered[j + 1] = &repls[i];
+                }
+            }
+        }
+    } else {
+        for (int i = 0; i < count; i++){
+            offset += strlen(repls[i].repl) - (repls[i].end - repls[i].start);
+            ordered[i] = &repls[i];
+        }
     }
+
 
     // New size is size of s + offset
     char* new_s = (char*)calloc(strlen(s) + offset, sizeof(char));
@@ -98,7 +106,6 @@ char* str_multi_replace(const char* s, Repl repls[], size_t count){
     size_t s_pos = 0;
 
     for (int r = 0; r < count; r++){
-        // printf("Doing (%d-%d -> %s)\n", ordered[r]->start, ordered[r]->end, ordered[r]->repl);
         strncpy(new_s + new_s_pos, s + s_pos, ordered[r]->start - s_pos);
         new_s_pos += ordered[r]->start - s_pos;
         strcpy(new_s + new_s_pos, ordered[r]->repl);
