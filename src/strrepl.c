@@ -1,16 +1,14 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include "strrepl.h"
 
+#define ASSERT_NOT(cond, fmt, ...) if(cond) {fprintf(stderr, fmt, __VA_ARGS__); exit(EXIT_FAILURE);}
 
 char* fread_all(const char* filename){
     FILE* fp = fopen(filename, "r");
-    if (!fp){
-        fputs("Could not open file!\n", stderr);
-        exit(EXIT_FAILURE);
-        return NULL;
-    }
+    ASSERT_NOT(!fp, "Could not open file '%s'", filename);
 
     fseek(fp, 0L, SEEK_END);
     size_t fsize = ftell(fp);
@@ -20,9 +18,7 @@ char* fread_all(const char* filename){
     if (!content){
         fclose(fp);
         free(fp);
-        fputs("Could not allocate content!\n", stderr);
-        exit(EXIT_FAILURE);
-        return NULL;
+        ASSERT_NOT(1, "Could not allocate content in fread_all", NULL);
     }
 
     fread(content, sizeof(char), fsize, fp);
@@ -34,12 +30,10 @@ char* fread_all(const char* filename){
 
 }
 
-char* str_replace(const char* s, size_t start, size_t end, const char* repl){
-    if (start > end){
-        fputs("Start is after end of string replacement\n", stderr);
-        exit(EXIT_FAILURE);
-        return NULL;
-    }
+char* str_replaced(const char* s, size_t start, size_t end, const char* repl){
+
+    ASSERT_NOT(start > end, "Cannot replace range from %d to %d: start must be less than end", start, end);
+
     size_t new_size = strlen(s) + (strlen(repl) - (end - start));
     char* new_s = calloc(new_size + 1, sizeof(char));
     
@@ -53,4 +47,67 @@ char* str_replace(const char* s, size_t start, size_t end, const char* repl){
     strncpy(new_s + start + strlen(repl), s + end, strlen(s) - end);
 
     return new_s;
+}
+
+char* str_multi_replace(const char* s, Repl repls[], size_t count){
+    // Ranges cannot overlap
+    
+    ASSERT_NOT(!s, "Cannot multi-replace on an empty string", NULL);
+
+    // Calculate final size and offset range indecies
+    int offset = 0;
+    Repl** ordered = (Repl**)calloc(count, sizeof(Repl*));
+
+    size_t min_start = SIZE_MAX;
+    for (int i = 0; i < count; i++){
+        if (repls[i].start < min_start){
+            min_start = repls[i].start;
+            ordered[0] = &repls[i];
+        }
+    }
+
+    for (int j = 0; j < count - 1; j++){
+        // Shift current min start range by current offset
+        // ordered[j]->start += offset;
+        // ordered[j]->end += offset;
+
+        // Calculate new offset
+        offset += strlen(ordered[j]->repl) - (ordered[j]->end - ordered[j]->start);
+
+        min_start = SIZE_MAX;
+        for (int i = 0; i < count; i++){
+
+            if (&repls[i] == ordered[j]) continue;
+
+            ASSERT_NOT(repls[i].start < ordered[j]->end && repls[i].end > ordered[j]->start, 
+                    "Replacements cannot overlap: (%d-%d -> '%s') and (%d-%d -> '%s')", 
+                    repls[i].start, repls[i].end, repls[i].repl,
+                    ordered[j]->start, ordered[j]->end, ordered[j]->repl);
+
+            if (ordered[j]->start < repls[i].start && repls[i].start < min_start){
+                min_start = repls[i].start;
+                ordered[j + 1] = &repls[i];
+            }
+        }
+    }
+
+    // New size is size of s + offset
+    char* new_s = (char*)calloc(strlen(s) + offset, sizeof(char));
+    ASSERT_NOT(!new_s, "New string could not be allocated in str_multi_replace!", NULL);
+    size_t new_s_pos = 0;
+    size_t s_pos = 0;
+
+    for (int r = 0; r < count; r++){
+        // printf("Doing (%d-%d -> %s)\n", ordered[r]->start, ordered[r]->end, ordered[r]->repl);
+        strncpy(new_s + new_s_pos, s + s_pos, ordered[r]->start - s_pos);
+        new_s_pos += ordered[r]->start - s_pos;
+        strcpy(new_s + new_s_pos, ordered[r]->repl);
+        new_s_pos += strlen(ordered[r]->repl);
+        s_pos = ordered[r]->end;
+    }
+
+    strncpy(new_s + new_s_pos, s + s_pos, strlen(s) - s_pos);
+
+    return new_s;
+
 }
