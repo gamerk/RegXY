@@ -24,7 +24,7 @@ char* fread_all(const char* filename){
     fread(content, sizeof(char), fsize, fp);
 
     fclose(fp);
-    free(fp);
+    // free(fp);
 
     return content;
 
@@ -112,6 +112,8 @@ char* str_multi_replace(const char* s, Repl repls[], size_t count, int is_sorted
     }
 
     strncpy(new_s + new_s_pos, s + s_pos, strlen(s) - s_pos);
+
+    free(ordered);
 
     return new_s;
 

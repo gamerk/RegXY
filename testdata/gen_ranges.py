@@ -33,7 +33,6 @@ if __name__ == "__main__":
             FILE* fp = fopen("output.txt.out", "w+");
             fwrite(r_cont, sizeof(char), strlen(r_cont), fp);
             fclose(fp);
-            free(fp);
 
             free(r_cont);
             free(cont);
