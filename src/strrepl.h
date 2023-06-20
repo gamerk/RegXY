@@ -1,5 +1,7 @@
 #include <stddef.h>
 
+#define ASSERT_NOT(cond, fmt, ...) if(cond) {fprintf(stderr, fmt, __VA_ARGS__); exit(EXIT_FAILURE);}
+
 typedef struct _repl {
     size_t start;
     size_t end;

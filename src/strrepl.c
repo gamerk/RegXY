@@ -6,8 +6,6 @@
 #include <time.h>
 #include "strrepl.h"
 
-#define ASSERT_NOT(cond, fmt, ...) if(cond) {fprintf(stderr, fmt, __VA_ARGS__); exit(EXIT_FAILURE);}
-
 char* fread_all(const char* filename){
     FILE* fp = fopen(filename, "r");
     ASSERT_NOT(!fp, "Could not open file '%s'", filename);
