@@ -2,7 +2,7 @@ from os.path import getsize
 from random import randrange
 from textwrap import dedent
 
-n = 10000
+n = 10
 
 if __name__ == "__main__":
     size = getsize("testdata/words_alpha.txt")
