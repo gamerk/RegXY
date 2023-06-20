@@ -26,7 +26,7 @@ ParseNode new_literal(char* str, ParseNode* parent){
     return (ParseNode){.type=LITERAL, .str=str, .child_count=0, ._child_arr_size=0, .parent=parent};
 }
 
-ParseNode parse(char* regex){
+ParseNode* parse(char* regex){
     char* token_ptr = regex;
 
     RegexRules rules[STACK_SIZE];
@@ -85,7 +85,6 @@ ParseNode parse(char* regex){
                 break;
             }
             case ALTERNATE: {
-                printf("doing alternate\n");
                 ParseNode* node = (ParseNode*)malloc(sizeof(ParseNode));
                 *node = new_alternate(current, (ParseNode*)malloc(sizeof(ParseNode)), current->parent);
                 
@@ -117,7 +116,7 @@ ParseNode parse(char* regex){
             ParseNode** curr_child = (ParseNode**)realloc(current->children, current->_child_arr_size * 2 * sizeof(ParseNode*));
             if (!curr_child){
                 fputs("Warning! Realloc failed to create larger array for children. Returning parse tree so far", stderr);
-                return *tree;
+                return tree;
             }
             current->children = curr_child;
             current->_child_arr_size *= 2;
@@ -129,19 +128,30 @@ ParseNode parse(char* regex){
 
     }
 
-    return *tree;
+    return tree;
 
 }
 
-void _print_parse_tree(ParseNode tree, int indent){
+void free_parse_tree(ParseNode* tree){
+    if (tree->str){
+        free(tree->str);
+    }
+    for (int i = 0; i < tree->child_count; i++){
+        free_parse_tree(tree->children[i]);
+    }
+    free(tree->children);
+    free(tree);
+}
+
+void _print_parse_tree(ParseNode* tree, int indent){
 
     for (int i = 0; i < indent; i++){
         printf("\t");
     }
 
-    switch (tree.type){
+    switch (tree->type){
         case LITERAL:
-            printf("Literal('%s')", tree.str);
+            printf("Literal('%s')", tree->str);
             break;
         case ZERO_OR_MORE:
             printf("Zero_or_more");
@@ -153,22 +163,29 @@ void _print_parse_tree(ParseNode tree, int indent){
             printf("Expression");
             break;
         default:
-            ASSERT_NOT(1, "Unknown Regex Rule '%d'\n", tree.type);
+            ASSERT_NOT(1, "Unknown Regex Rule '%d'\n", tree->type);
             break;
     }
 
     printf("\n");
 
-    for (int i = 0; i < tree.child_count; i++){
+    for (int i = 0; i < tree->child_count; i++){
         // for (int i = 0; i < indent; i++){
         //     printf("\t");
         // }
-        // printf("Child #%d@%zx(%1$zd)\n", i, *tree.children[i]);
-        _print_parse_tree(*tree.children[i], indent + 1);
+        // printf("Child #%d@%zx(%1$zd)\n", i, *tree->children[i]);
+        _print_parse_tree(tree->children[i], indent + 1);
+    }
+
+    if (tree->child_count){
+        for (int i = 0; i < indent; i++){
+            printf("\t");
+        }
+        printf("End\n");
     }
 }
 
-void print_parse_tree(ParseNode tree){
+void print_parse_tree(ParseNode* tree){
     _print_parse_tree(tree, 0);
 }
 

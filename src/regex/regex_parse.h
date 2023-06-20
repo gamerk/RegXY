@@ -21,7 +21,8 @@ typedef struct ParseNode {
 ParseNode new_alternate(ParseNode* left, ParseNode* right, ParseNode* parent);
 ParseNode new_zero_or_more(ParseNode* child, ParseNode* parent);
 ParseNode new_literal(char* str, ParseNode* parent);
-ParseNode parse(char* regex);
-void _print_parse_tree(ParseNode tree, int indent);
-void print_parse_tree(ParseNode tree);
+ParseNode* parse(char* regex);
+void free_parse_tree(ParseNode* tree);
+void _print_parse_tree(ParseNode* tree, int indent);
+void print_parse_tree(ParseNode* tree);
 // char** tokenize(const char* s, int* length);
