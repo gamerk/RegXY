@@ -13,17 +13,20 @@ ParseNode new_alternate(ParseNode* left, ParseNode* right, ParseNode* parent){
     ParseNode** children = (ParseNode**)calloc(2, sizeof(ParseNode*));
     children[0] = left;
     children[1] = right;
-    return (ParseNode){.type=ALTERNATE, .children=children, .child_count = 2, ._child_arr_size=2, .parent=parent};
+    return (ParseNode){.type=ALTERNATE, .children=children, .child_count = 2, ._child_arr_size=2, .parent=parent,
+                        .should_free_value=0};
 }
 
 ParseNode new_zero_or_more(ParseNode* child, ParseNode* parent){
-    ParseNode** children = (ParseNode**)calloc(2, sizeof(ParseNode*));
+    ParseNode** children = (ParseNode**)calloc(1, sizeof(ParseNode*));
     children[0] = child;
-    return (ParseNode){.type=ZERO_OR_MORE, .children=children, .child_count = 1, ._child_arr_size=1, .parent=parent};
+    return (ParseNode){.type=ZERO_OR_MORE, .children=children, .child_count = 1, ._child_arr_size=1, .parent=parent,
+                        .should_free_value=0};
 }
 
 ParseNode new_literal(char* str, ParseNode* parent){
-    return (ParseNode){.type=LITERAL, .str=str, .child_count=0, ._child_arr_size=0, .parent=parent};
+    return (ParseNode){.type=LITERAL, .value=str, .child_count=0, ._child_arr_size=0, .parent=parent,
+                        .should_free_value=1};
 }
 
 ParseNode* parse(char* regex){
@@ -40,6 +43,16 @@ ParseNode* parse(char* regex){
 
     while (is_parsing){
 
+        if (current->child_count >= current->_child_arr_size - 1 && current->children){
+            ParseNode** curr_child = (ParseNode**)realloc(current->children, current->_child_arr_size * 2 * sizeof(ParseNode*));
+            if (!curr_child){
+                fputs("Warning! Realloc failed to create larger array for children. Returning parse tree so far", stderr);
+                return tree;
+            }
+            current->children = curr_child;
+            current->_child_arr_size *= 2;
+        }
+
         // Add rules to rule stack
         if (*token_ptr){
             switch(*token_ptr){
@@ -48,6 +61,12 @@ ParseNode* parse(char* regex){
                     break;
                 case '|':
                     *(++rules_top) = ALTERNATE;
+                    break;
+                case '(':
+                    *(++rules_top) = GROUP;
+                    break;
+                case ')':
+                    *(++rules_top) = GROUP_END;
                     break;
                 default:
                     *(++rules_top) = LITERAL;
@@ -103,6 +122,29 @@ ParseNode* parse(char* regex){
                 *current = (ParseNode){.type = EXPR, .parent=node, .child_count=0, ._child_arr_size=10, .children=(ParseNode**)calloc(10, sizeof(ParseNode*))};
                 break;
             }
+            case GROUP: {
+                // Creates a group node with only one child: an expr node
+                ParseNode* node = (ParseNode*)malloc(sizeof(ParseNode));
+                ParseNode** children = (ParseNode**)calloc(1, sizeof(ParseNode*));
+                *node = (ParseNode){.type=GROUP, .children=children, .child_count = 1, 
+                                    ._child_arr_size=1, .parent=current,
+                                    .should_free_value=0};
+                children[0] = (ParseNode*)malloc(sizeof(ParseNode));
+                *children[0] = (ParseNode){.type=EXPR, .children=(ParseNode**)calloc(1, sizeof(ParseNode*)),
+                                            .child_count=0, ._child_arr_size=1, .parent=node};
+                current->children[current->child_count++] = node;
+                current = node->children[0];
+
+                break;
+            }
+            case GROUP_END: {
+                while (current->type != GROUP || !current->parent){
+                    current = current->parent;
+                }
+                ASSERT_NOT(!current->parent, "Unmatched parenthesis at position %zd\n", token_ptr - regex);
+                current = current->parent;
+                break;
+            }
             default:
                 ASSERT_NOT(1, "Unknown Regex Rule '%d'\n", *(rules_top + 1));
                 break;
@@ -110,16 +152,6 @@ ParseNode* parse(char* regex){
 
         while (tree->parent){
             tree = tree->parent;
-        }
-        
-        if (current->child_count >= current->_child_arr_size - 1 && current->children){
-            ParseNode** curr_child = (ParseNode**)realloc(current->children, current->_child_arr_size * 2 * sizeof(ParseNode*));
-            if (!curr_child){
-                fputs("Warning! Realloc failed to create larger array for children. Returning parse tree so far", stderr);
-                return tree;
-            }
-            current->children = curr_child;
-            current->_child_arr_size *= 2;
         }
 
         if (*token_ptr){
@@ -133,8 +165,8 @@ ParseNode* parse(char* regex){
 }
 
 void free_parse_tree(ParseNode* tree){
-    if (tree->str){
-        free(tree->str);
+    if (tree->value.str && tree->should_free_value){
+        free(tree->value.str);
     }
     for (int i = 0; i < tree->child_count; i++){
         free_parse_tree(tree->children[i]);
@@ -151,7 +183,7 @@ void _print_parse_tree(ParseNode* tree, int indent){
 
     switch (tree->type){
         case LITERAL:
-            printf("Literal('%s')", tree->str);
+            printf("Literal('%s')", tree->value.str);
             break;
         case ZERO_OR_MORE:
             printf("Zero_or_more");
@@ -161,6 +193,9 @@ void _print_parse_tree(ParseNode* tree, int indent){
             break;
         case EXPR:
             printf("Expression");
+            break;
+        case GROUP:
+            printf("Group");
             break;
         default:
             ASSERT_NOT(1, "Unknown Regex Rule '%d'\n", tree->type);
@@ -189,66 +224,3 @@ void print_parse_tree(ParseNode* tree){
     _print_parse_tree(tree, 0);
 }
 
-// char** tokenize(const char* s, int* length){
-//     size_t tokens_size = 5;
-//     char** tokens = (char**)calloc(tokens_size, sizeof(char*));
-//     ASSERT_NOT(!tokens, "Unnable to allocate tokens!", NULL);
-
-//     size_t token_on = 0;
-
-//     int reading_literal = 0;
-//     size_t literal_start = 0;
-//     size_t literal_end = 0;
-//     for (size_t i = 0; i < strlen(s); i++){
-//         switch (s[i]){
-//             case '*':
-//                 tokens[token_on] = "*";
-//                 token_on++;
-//                 break;
-//             case '|':
-//                 tokens[token_on] = "|";
-//                 token_on++;
-//                 break;
-//             default:
-//                 reading_literal = 1;
-//                 if (!reading_literal){
-//                     literal_start = i;
-//                     literal_end = i + 1;
-//                     token_on++;
-//                 } else {
-//                     literal_end++;
-//                 }
-//         }
-
-//         if (!reading_literal && literal_start != literal_end){
-//             char* lit = (char*)calloc(literal_end - literal_start + 1, sizeof(char));
-//             strncpy(lit, s + literal_start, literal_end - literal_start);
-//             tokens[token_on - 1] = lit;
-//             literal_start = 0;
-//             literal_end = 0;
-//         }
-
-//         reading_literal = 0;
-
-//         if (token_on >= tokens_size){
-//             printf("Reallocing form %d (%zd bytes) to %d (%zd bytes)!\n", tokens_size, sizeof(*tokens), tokens_size * 2, tokens_size * 2 * sizeof(char*));
-//             char** n_tokens = (char**)realloc(tokens, tokens_size * 2 * sizeof(char*));
-//             if (!n_tokens){
-//                 fputs("Warning! Could not reallocate token list. Returning current tokens list.", stderr);
-//                 return tokens;
-//             }
-//             tokens = n_tokens;
-            
-//             tokens_size *= 2;
-//         }
-//     }
-
-//     *length = token_on;
-//     char** n_tokens = (char**)realloc(tokens, token_on * sizeof(char*));
-//     if (!n_tokens){
-//         fputs("Warning! Could not reallocate token list. Returning current tokens list.", stderr);
-//     } else {
-//         tokens = n_tokens;
-//     }
-//     return tokens;
-// }

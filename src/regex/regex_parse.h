@@ -4,18 +4,25 @@ typedef enum RegexRules {
     LITERAL,
     ZERO_OR_MORE,
     ALTERNATE,
-    JOIN,
     EXPR,
+    GROUP,
+    GROUP_END,
     END
 } RegexRules;
 
+typedef union NodeValue {
+    char* str;
+    size_t bounds[2];
+} NodeValue;
+
 typedef struct ParseNode {
     RegexRules type;
-    char* str;
+    NodeValue value;
     struct ParseNode** children;
     size_t child_count;
     size_t _child_arr_size;
     struct ParseNode* parent;
+    char should_free_value;
 } ParseNode;
 
 ParseNode new_alternate(ParseNode* left, ParseNode* right, ParseNode* parent);

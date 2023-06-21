@@ -10,7 +10,7 @@
 
 int main(void){
 
-    ParseNode* tree = parse("ab*a|b*|c");
+    ParseNode* tree = parse("a(b|c)|a");
     print_parse_tree(tree);
     free_parse_tree(tree);
 
