@@ -1,4 +1,11 @@
+#ifndef REGEX_PARSE_H
+#define REGEX_PARSE_H
+#include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
+
+#define ESCAPE_CHR '/'
+// #define ESCAPE_STR "/"
 
 typedef enum RegexRules {
     LITERAL,
@@ -7,12 +14,18 @@ typedef enum RegexRules {
     EXPR,
     GROUP,
     GROUP_END,
+    REPEAT_CONST,
+    REPEAT_BOUNDED,
+    REPEAT_UNBOUNDED,
+    CHAR_CLASS,
+    INV_CHAR_CLASS,
     END
 } RegexRules;
 
 typedef union NodeValue {
     char* str;
     size_t bounds[2];
+    uint64_t in_class[4];
 } NodeValue;
 
 typedef struct ParseNode {
@@ -28,8 +41,13 @@ typedef struct ParseNode {
 ParseNode new_alternate(ParseNode* left, ParseNode* right, ParseNode* parent);
 ParseNode new_zero_or_more(ParseNode* child, ParseNode* parent);
 ParseNode new_literal(char* str, ParseNode* parent);
+ParseNode new_char_class(uint64_t allowed_chars[4], ParseNode* parent, bool inverted);
+
 ParseNode* parse(char* regex);
 void free_parse_tree(ParseNode* tree);
 void _print_parse_tree(ParseNode* tree, int indent);
 void print_parse_tree(ParseNode* tree);
-// char** tokenize(const char* s, int* length);
+size_t parse_int(char** ptr);
+
+
+#endif /* REGEX_PARSE_H */

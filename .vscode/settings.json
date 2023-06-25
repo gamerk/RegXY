@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "cstdlib": "cpp",
-        "regex": "cpp"
+        "regex": "cpp",
+        "char_class.h": "c"
     }
 }

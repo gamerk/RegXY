@@ -18,13 +18,12 @@ char* fread_all(const char* filename){
     if (!content){
         fclose(fp);
         free(fp);
-        ASSERT_NOT(1, "Could not allocate content in fread_all", NULL);
+        ASSERT_NOT(1, "Could not allocate content in fread_all");
     }
 
     fread(content, sizeof(char), fsize, fp);
 
     fclose(fp);
-    // free(fp);
 
     return content;
 
@@ -52,7 +51,7 @@ char* str_replaced(const char* s, size_t start, size_t end, const char* repl){
 char* str_multi_replace(const char* s, Repl repls[], size_t count, int is_sorted){
     // Ranges cannot overlap
     
-    ASSERT_NOT(!s, "Cannot multi-replace on an empty string", NULL);
+    ASSERT_NOT(!s, "Cannot multi-replace on an empty string");
 
     // Calculate final size and offset range indecies
     int offset = 0;
@@ -99,7 +98,7 @@ char* str_multi_replace(const char* s, Repl repls[], size_t count, int is_sorted
 
     // New size is size of s + offset
     char* new_s = (char*)calloc(strlen(s) + offset, sizeof(char));
-    ASSERT_NOT(!new_s, "New string could not be allocated in str_multi_replace!", NULL);
+    ASSERT_NOT(!new_s, "New string could not be allocated in str_multi_replace!");
     size_t new_s_pos = 0;
     size_t s_pos = 0;
 

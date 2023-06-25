@@ -1,9 +1,12 @@
+#include "regex_parse.h"
+#include "char_class.h"
+#include "../strrepl.h"
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdint.h>
-#include "regex_parse.h"
-#include "../strrepl.h"
+#include <stdbool.h>
 
 #define STACK_SIZE 50
 
@@ -29,6 +32,29 @@ ParseNode new_literal(char* str, ParseNode* parent){
                         .should_free_value=1};
 }
 
+ParseNode new_char_class(uint64_t allowed_chars[4], ParseNode* parent, bool inverted){
+    ParseNode node = (ParseNode){.type = inverted ? INV_CHAR_CLASS : CHAR_CLASS,
+                        .child_count = 0,
+                        ._child_arr_size = 0, 
+                        .children = NULL,
+                        .parent = parent,
+                        .should_free_value = 0, 
+                        };
+    
+    memcpy(node.value.in_class, allowed_chars, 4);
+    return node;
+}
+
+size_t parse_int(char** ptr){
+    size_t out = 0;
+    while ('0' <= **ptr && **ptr <= '9'){
+        printf("Character parsing as int: %c\n", **ptr);
+        out = out * 10 + **ptr - '0';
+        (*ptr)++;
+    }
+    return out;
+}
+
 ParseNode* parse(char* regex){
     char* token_ptr = regex;
 
@@ -39,7 +65,8 @@ ParseNode* parse(char* regex){
     ParseNode *tree = (ParseNode*)malloc(sizeof(ParseNode));
     *tree = (ParseNode){.type=EXPR, .children=(ParseNode**)calloc(10, sizeof(ParseNode*)), .child_count=0, ._child_arr_size=10};
     ParseNode* current = tree;
-    char is_parsing = 1;
+    bool is_parsing = true;
+    int paren_balance = 0;
 
     while (is_parsing){
 
@@ -63,10 +90,25 @@ ParseNode* parse(char* regex){
                     *(++rules_top) = ALTERNATE;
                     break;
                 case '(':
+                    paren_balance++;
                     *(++rules_top) = GROUP;
                     break;
                 case ')':
+                    paren_balance--;
                     *(++rules_top) = GROUP_END;
+                    break;
+                case '{':
+                    // Using REPEAT_CONST as a placeholder for all repeat types
+                    *(++rules_top) = REPEAT_CONST;
+                    break;
+                case '[':
+                    if (*(token_ptr + 1) == '^'){
+                        *(++rules_top) = INV_CHAR_CLASS;
+                        token_ptr++;
+                    } else {
+                        *(++rules_top) = CHAR_CLASS;
+                    }
+                    token_ptr++;
                     break;
                 default:
                     *(++rules_top) = LITERAL;
@@ -80,12 +122,12 @@ ParseNode* parse(char* regex){
         if (*token_ptr) printf("With char %c", *token_ptr);
         printf("\n");
 
-        ASSERT_NOT(rules_top >= rules + STACK_SIZE, "Stack overflow on rules", NULL);
+        ASSERT_NOT(rules_top >= rules + STACK_SIZE, "Stack overflow on rules");
 
         // Apply a rule from rule stack
         switch(*(rules_top--)){
             case END:
-                is_parsing = 0;
+                is_parsing = false;
                 break;
             case LITERAL: {
                 ParseNode* node = malloc(sizeof(ParseNode));
@@ -93,6 +135,14 @@ ParseNode* parse(char* regex){
                 s[0] = *token_ptr;
                 *node = new_literal(s, current);
                 current->children[current->child_count++] = node;
+                break;
+            }
+            case CHAR_CLASS: {
+                current->children[current->child_count++] = parse_char_class(&token_ptr, current, false);
+                break;
+            }
+            case INV_CHAR_CLASS: {
+                current->children[current->child_count++] = parse_char_class(&token_ptr, current, true);
                 break;
             }
             case ZERO_OR_MORE: {
@@ -145,6 +195,41 @@ ParseNode* parse(char* regex){
                 current = current->parent;
                 break;
             }
+            case REPEAT_CONST: {
+                ParseNode* node = (ParseNode*)malloc(sizeof(ParseNode));
+                token_ptr++;
+                node->value.bounds[0] = parse_int(&token_ptr);
+                while (*token_ptr == ' ') token_ptr++;
+
+                ASSERT_NOT(*token_ptr != ',' && *token_ptr != '}', 
+                            "Repeat lower bound must be a positive integer, but found the character '%c'", *token_ptr);
+                if (*token_ptr == '}'){
+                    // Actually is REPEAT_CONST
+                    node->type = REPEAT_CONST;
+                } else if (*token_ptr == ',' && *(token_ptr + 1) == '}'){
+                    node->type = REPEAT_UNBOUNDED;
+                    token_ptr++;
+                } else {
+                    token_ptr++;
+                    node->type = REPEAT_BOUNDED;
+                    while (*token_ptr == ' ') token_ptr++;
+                    node->value.bounds[1] = parse_int(&token_ptr);
+                    while (*token_ptr == ' ') token_ptr++;
+                    ASSERT_NOT(*token_ptr != '}', \
+                            "Repeat upper bound must be a positive integer, but found the character '%c'", *token_ptr);
+                }
+
+                node->child_count = 1;
+                node->_child_arr_size = 1;
+                node->children = (ParseNode**)malloc(sizeof(ParseNode));
+                node->children[0] = current->children[current->child_count - 1];
+
+                node->should_free_value = 0;
+                node->parent = current;
+                current->children[current->child_count - 1]->parent = node;
+                current->children[current->child_count - 1] = node;
+                break;
+            }
             default:
                 ASSERT_NOT(1, "Unknown Regex Rule '%d'\n", *(rules_top + 1));
                 break;
@@ -159,6 +244,8 @@ ParseNode* parse(char* regex){
         }
 
     }
+
+    ASSERT_NOT(paren_balance, "Parentheses are not balanced in expression");
 
     return tree;
 
@@ -197,6 +284,36 @@ void _print_parse_tree(ParseNode* tree, int indent){
         case GROUP:
             printf("Group");
             break;
+        case REPEAT_CONST:
+            printf("Const Repeat {%zd}", tree->value.bounds[0]);
+            break;
+        case REPEAT_BOUNDED:
+            printf("Bounded Repeat {%zd, %zd}", tree->value.bounds[0], tree->value.bounds[1]);
+            break;
+        case REPEAT_UNBOUNDED:
+            printf("Unbounded Repeat {%zd, }", tree->value.bounds[0]);
+            break;
+        case INV_CHAR_CLASS:
+        case CHAR_CLASS: {
+            if (tree->type == INV_CHAR_CLASS){
+                printf("Inverted ");
+            }
+            printf("Character Class: [");
+
+            for (int i = 0; i < 256; i++){
+                if (!contains_char(tree->value.in_class, (char)i)) continue;
+                if (32 <= i && i <= 127){
+                    printf("%c", (char)i);
+                } else if (i == 10){
+                    printf("\\n");
+                } else {
+                    printf("\\x%02X", i);
+                }
+            }
+            
+            printf("]");
+            break;
+        }
         default:
             ASSERT_NOT(1, "Unknown Regex Rule '%d'\n", tree->type);
             break;
