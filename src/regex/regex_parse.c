@@ -41,7 +41,7 @@ ParseNode new_char_class(uint64_t allowed_chars[4], ParseNode* parent, bool inve
                         .should_free_value = 0, 
                         };
     
-    memcpy(node.value.in_class, allowed_chars, 4);
+    memcpy(node.value.in_class, allowed_chars, sizeof(uint64_t));
     return node;
 }
 
@@ -302,7 +302,7 @@ void _print_parse_tree(ParseNode* tree, int indent){
 
             for (int i = 0; i < 256; i++){
                 if (!contains_char(tree->value.in_class, (char)i)) continue;
-                if (32 <= i && i <= 127){
+                if (32 <= i && i < 127){
                     printf("%c", (char)i);
                 } else if (i == 10){
                     printf("\\n");

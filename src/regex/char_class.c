@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 void add_char(uint64_t (*allowed_chars)[4], char c){
     (*allowed_chars)[(uint8_t)c >> 6] |= 1ULL << abs(c & 0b00111111);
@@ -39,10 +40,39 @@ void add_char_range(uint64_t (*allowed_chars)[4], char start, char end){
 }
 
 void add_char_class(uint64_t (*dest)[4], uint64_t src[4]){
-    *dest[0] |= src[0];
-    *dest[1] |= src[1];
-    *dest[2] |= src[2];
-    *dest[3] |= src[3];
+    (*dest)[0] |= src[0];
+    (*dest)[1] |= src[1];
+    (*dest)[2] |= src[2];
+    (*dest)[3] |= src[3];
+}
+
+void add_inv_char_class(uint64_t (*dest)[4], uint64_t src[4]){
+    (*dest)[0] |= ~src[0];
+    (*dest)[1] |= ~src[1];
+    (*dest)[2] |= ~src[2];
+    (*dest)[3] |= ~src[3];
+}
+
+void add_node(uint64_t (*allowed_chars)[4], ParseNode* node){
+    switch (node->type){
+        case LITERAL: {
+            for (size_t i = 0; i < strlen(node->value.str); i++){
+                add_char(allowed_chars, node->value.str[i]);
+            }
+            break;
+        }
+        case CHAR_CLASS: {
+            add_char_class(allowed_chars, node->value.in_class);
+            break;
+        }
+        case INV_CHAR_CLASS: {
+            add_inv_char_class(allowed_chars, node->value.in_class);
+            break;
+        }
+        default:
+            ASSERT_NOT(1, "Cannot incorperate node of type %d into char class", node->type);
+            break;
+    }
 }
 
 bool contains_char(uint64_t allowed_chars[4], char c){
@@ -60,6 +90,31 @@ ParseNode* parse_escaped(char** ptr, ParseNode* parent){
         case 't':
             *out = new_literal("\t", parent);
             break;
+        case 'd':
+            // [0-9]
+            *out = new_char_class((uint64_t[4]){0x3FF000000000000ULL,0ULL,0ULL,0ULL}, parent, false);
+            printf("this is %zu\n", (uint64_t)out->value.in_class[0]);
+            break;
+        case 'D':
+            // [^0-9]
+            *out = new_char_class((uint64_t[]){0x3FF000000000000ULL,0,0,0}, parent, true);
+            break;
+        case 's':
+            // [ \t\n\r\f\v]
+            *out = new_char_class((uint64_t[4]){0x100003e00ULL, 0x0ULL, 0x0ULL, 0x0ULL}, parent, false);
+            break;
+        case 'S':
+            // [^ \t\n\r\f\v]
+            *out = new_char_class((uint64_t[4]){0x100003e00ULL, 0x0ULL, 0x0ULL, 0x0ULL}, parent, true);
+            break;
+        case 'w':
+            // [0-9A-Za-z_]
+            *out = new_char_class((uint64_t[4]){0x3ff000000000000ULL, 0x7fffffe87fffffeULL, 0x0ULL, 0x0ULL}, parent, false);
+            break;
+        case 'W':
+            // [^0-9A-Za-z_]
+            *out = new_char_class((uint64_t[4]){0x3ff000000000000ULL, 0x7fffffe87fffffeULL, 0x0ULL, 0x0ULL}, parent, true);
+            break;
         default:
             char* s = (char*)calloc(2, sizeof(char));
             s[0] = **ptr;
@@ -68,7 +123,8 @@ ParseNode* parse_escaped(char** ptr, ParseNode* parent){
             break;
     }
 
-    *ptr++;
+    return out;
+
 }
 
 ParseNode* parse_char_class(char** ptr, ParseNode* parent, bool inverted){
@@ -76,15 +132,22 @@ ParseNode* parse_char_class(char** ptr, ParseNode* parent, bool inverted){
 
     ParseNode* node = (ParseNode*)malloc(sizeof(ParseNode));
     *node = new_char_class((uint64_t[]){0,0,0,0}, parent, inverted);
+    uint64_t (*ic_ptr)[4] = &(node->value.in_class);
     
     for (; **ptr != ']' && **ptr != '\0'; (*ptr)++){
         if (*(*ptr + 1) == '-'){
             char start = **ptr;
             char end = *(*ptr + 2);
-            add_char_range(&(node->value.in_class), start, end);
+            add_char_range(ic_ptr, start, end);
+            printf("%zX %zX\n", node->value.in_class[0], node->value.in_class[1]);
             *ptr += 2;
+        } else if (**ptr == ESCAPE_CHR) {
+            *ptr += 1;
+            ParseNode* node = parse_escaped(ptr, NULL);
+            add_node(ic_ptr, node);
+            free(node);
         } else {
-            add_char(&(node->value.in_class), **ptr);
+            add_char(ic_ptr, **ptr);
         }
     }
 
