@@ -20,10 +20,10 @@ ParseNode new_alternate(ParseNode* left, ParseNode* right, ParseNode* parent){
                         .should_free_value=0};
 }
 
-ParseNode new_zero_or_more(ParseNode* child, ParseNode* parent){
+ParseNode new_quantifier(RegexRules type, ParseNode* child, ParseNode* parent){
     ParseNode** children = (ParseNode**)calloc(1, sizeof(ParseNode*));
     children[0] = child;
-    return (ParseNode){.type=ZERO_OR_MORE, .children=children, .child_count = 1, ._child_arr_size=1, .parent=parent,
+    return (ParseNode){.type=type, .children=children, .child_count = 1, ._child_arr_size=1, .parent=parent,
                         .should_free_value=0};
 }
 
@@ -86,6 +86,12 @@ ParseNode* parse(char* regex){
                 case '*':
                     *(++rules_top) = ZERO_OR_MORE;
                     break;
+                case '+':
+                    *(++rules_top) = ONE_OR_MORE;
+                    break;
+                case '?':
+                    *(++rules_top) = ZERO_OR_ONE;
+                    break;
                 case '|':
                     *(++rules_top) = ALTERNATE;
                     break;
@@ -145,10 +151,12 @@ ParseNode* parse(char* regex){
                 current->children[current->child_count++] = parse_char_class(&token_ptr, current, true);
                 break;
             }
+            case ZERO_OR_ONE:
+            case ONE_OR_MORE:
             case ZERO_OR_MORE: {
                 ASSERT_NOT(current->child_count == 0, "Zero or more at postion %d must be preceded by another expression", token_ptr - regex);
                 ParseNode* node = malloc(sizeof(ParseNode));
-                *node = new_zero_or_more(current->children[current->child_count - 1], current);
+                *node = new_quantifier(*(rules + 1), current->children[current->child_count - 1], current);
                 current->children[current->child_count - 1]->parent = node;
                 current->children[current->child_count - 1] = node;
                 break;
@@ -273,7 +281,13 @@ void _print_parse_tree(ParseNode* tree, int indent){
             printf("Literal('%s')", tree->value.str);
             break;
         case ZERO_OR_MORE:
-            printf("Zero_or_more");
+            printf("Zero or more");
+            break;
+        case ZERO_OR_ONE:
+            printf("Zero or one");
+            break;
+        case ONE_OR_MORE:
+            printf("One or more");
             break;
         case ALTERNATE:
             printf("Alternate");

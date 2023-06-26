@@ -10,6 +10,8 @@
 typedef enum RegexRules {
     LITERAL,
     ZERO_OR_MORE,
+    ONE_OR_MORE,
+    ZERO_OR_ONE,
     ALTERNATE,
     EXPR,
     GROUP,
