@@ -135,17 +135,17 @@ ParseNode* parse_char_class(char** ptr, ParseNode* parent, bool inverted){
     uint64_t (*ic_ptr)[4] = &(node->value.in_class);
     
     for (; **ptr != ']' && **ptr != '\0'; (*ptr)++){
-        if (*(*ptr + 1) == '-'){
+        if (**ptr == ESCAPE_CHR) {
+            *ptr += 1;
+            ParseNode* node = parse_escaped(ptr, NULL);
+            add_node(ic_ptr, node);
+            free(node);
+        } else if (*(*ptr + 1) == '-'){
             char start = **ptr;
             char end = *(*ptr + 2);
             add_char_range(ic_ptr, start, end);
             printf("%zX %zX\n", node->value.in_class[0], node->value.in_class[1]);
             *ptr += 2;
-        } else if (**ptr == ESCAPE_CHR) {
-            *ptr += 1;
-            ParseNode* node = parse_escaped(ptr, NULL);
-            add_node(ic_ptr, node);
-            free(node);
         } else {
             add_char(ic_ptr, **ptr);
         }

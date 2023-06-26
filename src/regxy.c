@@ -10,7 +10,7 @@
 
 int main(void){
 
-    ParseNode* tree = parse("[/d/s]");
+    ParseNode* tree = parse("[a/-b]");
     print_parse_tree(tree);
     free_parse_tree(tree);
 
