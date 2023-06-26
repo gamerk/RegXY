@@ -153,7 +153,5 @@ ParseNode* parse_char_class(char** ptr, ParseNode* parent, bool inverted){
 
     ASSERT_NOT(**ptr == '\0', "Unclosed char class\n");
 
-    (*ptr)++;
-
     return node;
 }
