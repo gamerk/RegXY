@@ -5,7 +5,6 @@
 #include <stdint.h>
 
 #define ESCAPE_CHR '/'
-// #define ESCAPE_STR "/"
 
 typedef enum RegexRules {
     LITERAL,

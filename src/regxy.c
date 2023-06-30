@@ -1,4 +1,5 @@
 #include "regex/regex_parse.h"
+#include "regex/regex_simplify.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,7 +12,10 @@
 
 int main(void){
 
-    ParseNode* tree = parse("/x61?? /+*|abc.df[^123-7a-b](456|7)");
+    ParseNode* tree = parse("/x61?? /+*|abc.df[^/w](456|7)");
+    print_parse_tree(tree);
+    simplify_tree(tree);
+    printf("-------------- After simplification ---------------\n");
     print_parse_tree(tree);
     free_parse_tree(tree);
 

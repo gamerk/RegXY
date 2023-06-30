@@ -40,17 +40,15 @@ void add_char_range(uint64_t (*allowed_chars)[4], char start, char end){
 }
 
 void add_char_class(uint64_t (*dest)[4], uint64_t src[4]){
-    (*dest)[0] |= src[0];
-    (*dest)[1] |= src[1];
-    (*dest)[2] |= src[2];
-    (*dest)[3] |= src[3];
+    for (int i = 0; i < 4; i++) {
+        (*dest)[i] |= src[i];
+    }
 }
 
 void add_inv_char_class(uint64_t (*dest)[4], uint64_t src[4]){
-    (*dest)[0] |= ~src[0];
-    (*dest)[1] |= ~src[1];
-    (*dest)[2] |= ~src[2];
-    (*dest)[3] |= ~src[3];
+    for (int i = 0; i < 4; i++) {
+        (*dest)[i] |= ~src[i];
+    }
 }
 
 void add_node(uint64_t (*allowed_chars)[4], ParseNode* node){
