@@ -8,7 +8,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define STACK_SIZE 50
+#define STACK_SIZE 3
 
 // Create parse tree
 
@@ -30,6 +30,11 @@ ParseNode new_quantifier(RegexRules type, ParseNode* child, ParseNode* parent){
 ParseNode new_literal(char* str, ParseNode* parent){
     return (ParseNode){.type=LITERAL, .value=str, .child_count=0, ._child_arr_size=0, .parent=parent,
                         .should_free_value=1};
+}
+
+ParseNode new_wildcard(ParseNode* parent){
+    return (ParseNode){.type=WILDCARD, .value=NULL, .child_count=0, ._child_arr_size=0, .parent=parent,
+                        .should_free_value=0};
 }
 
 ParseNode new_char_class(uint64_t allowed_chars[4], ParseNode* parent, bool inverted){
@@ -83,6 +88,9 @@ ParseNode* parse(char* regex){
         // Add rules to rule stack
         if (*token_ptr){
             switch(*token_ptr){
+                case ESCAPE_CHR:
+                    *(++rules_top) = ESCAPE;
+                    break;
                 case '*':
                     *(++rules_top) = ZERO_OR_MORE;
                     break;
@@ -116,17 +124,20 @@ ParseNode* parse(char* regex){
                     }
                     token_ptr++;
                     break;
+                case '.':
+                    *(++rules_top) = WILDCARD;
+                    break;
                 default:
                     *(++rules_top) = LITERAL;
                     break;
             }
         }
-
-        for (RegexRules* i = &rules[0]; i <= rules_top; i++){
-            printf("%d ", *i);
-        }
-        if (*token_ptr) printf("With char %c", *token_ptr);
-        printf("\n");
+        // // For debugging rule stack
+        // for (RegexRules* i = &rules[0]; i <= rules_top; i++){
+        //     printf("%d ", *i);
+        // }
+        // if (*token_ptr) printf("With char %c", *token_ptr);
+        // printf("\n");
 
         ASSERT_NOT(rules_top >= rules + STACK_SIZE, "Stack overflow on rules");
 
@@ -143,6 +154,17 @@ ParseNode* parse(char* regex){
                 current->children[current->child_count++] = node;
                 break;
             }
+            case ESCAPE: {
+                token_ptr++;
+                current->children[current->child_count++] = parse_escaped(&token_ptr, current);
+                break;
+            }
+            case WILDCARD: {
+                ParseNode* node = malloc(sizeof(ParseNode));
+                *node = new_wildcard(current);
+                current->children[current->child_count++] = node;
+                break;
+            }
             case CHAR_CLASS: {
                 current->children[current->child_count++] = parse_char_class(&token_ptr, current, false);
                 break;
@@ -154,9 +176,15 @@ ParseNode* parse(char* regex){
             case ZERO_OR_ONE:
             case ONE_OR_MORE:
             case ZERO_OR_MORE: {
-                ASSERT_NOT(current->child_count == 0, "Zero or more at postion %d must be preceded by another expression", token_ptr - regex);
+                ASSERT_NOT(current->child_count == 0, "Quantifier at postion %d must be preceded by another expression", token_ptr - regex);
                 ParseNode* node = malloc(sizeof(ParseNode));
                 *node = new_quantifier(*(rules + 1), current->children[current->child_count - 1], current);
+                if (*(token_ptr + 1) == '?'){
+                    token_ptr++;
+                    node->value.lazy = true;
+                } else {
+                    node->value.lazy = false;
+                }
                 current->children[current->child_count - 1]->parent = node;
                 current->children[current->child_count - 1] = node;
                 break;
@@ -169,7 +197,6 @@ ParseNode* parse(char* regex){
                     for (int i = 0; i < current->parent->child_count; i++){
                         if (current->parent->children[i] == current){
                             current->parent->children[i] = node;
-                            printf("Replaced %i\n", i);
                             break;
                         }
                     }
@@ -277,17 +304,20 @@ void _print_parse_tree(ParseNode* tree, int indent){
     }
 
     switch (tree->type){
+        case WILDCARD:
+            printf("Wildcard");
+            break;
         case LITERAL:
             printf("Literal('%s')", tree->value.str);
             break;
         case ZERO_OR_MORE:
-            printf("Zero or more");
+            printf("Zero or more (lazy = %d)", tree->value.lazy);
             break;
         case ZERO_OR_ONE:
-            printf("Zero or one");
+            printf("Zero or one (lazy = %d)", tree->value.lazy);
             break;
         case ONE_OR_MORE:
-            printf("One or more");
+            printf("One or more (lazy = %d)", tree->value.lazy);
             break;
         case ALTERNATE:
             printf("Alternate");

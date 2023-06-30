@@ -31,7 +31,7 @@ void add_char_range(uint64_t (*allowed_chars)[4], char start, char end){
     ASSERT_NOT(start >= end, "Start must be before end, but start = '%c'(%1$d) and end = '%c'(%2$d)", start, end);
     
     uint32_t index = ((uint8_t)start) >> 6;
-    printf("Index for %c-%c: %d\n", start, end, index);
+    // printf("Index for %c-%c: %d\n", start, end, index);
     start &= 0b00111111;
     end &= 0b00111111;
     uint64_t u = ~(uint64_t)0;
@@ -93,11 +93,11 @@ ParseNode* parse_escaped(char** ptr, ParseNode* parent){
         case 'd':
             // [0-9]
             *out = new_char_class((uint64_t[4]){0x3FF000000000000ULL,0ULL,0ULL,0ULL}, parent, false);
-            printf("this is %zu\n", (uint64_t)out->value.in_class[0]);
+            // printf("this is %zu\n", (uint64_t)out->value.in_class[0]);
             break;
         case 'D':
             // [^0-9]
-            *out = new_char_class((uint64_t[]){0x3FF000000000000ULL,0,0,0}, parent, true);
+            *out = new_char_class((uint64_t[4]){0x3FF000000000000ULL,0,0,0}, parent, true);
             break;
         case 's':
             // [ \t\n\r\f\v]
@@ -115,6 +115,14 @@ ParseNode* parse_escaped(char** ptr, ParseNode* parent){
             // [^0-9A-Za-z_]
             *out = new_char_class((uint64_t[4]){0x3ff000000000000ULL, 0x7fffffe87fffffeULL, 0x0ULL, 0x0ULL}, parent, true);
             break;
+        case 'x': {
+            char hex[3] = {*(++*ptr), *(++*ptr), 0};
+            char* s = (char*)calloc(2, sizeof(char));
+            s[0] = (char)strtol(hex, NULL, 16);
+            s[1] = 0;
+            *out = new_literal(s, parent);
+            break;
+        }
         default:
             char* s = (char*)calloc(2, sizeof(char));
             s[0] = **ptr;
@@ -144,7 +152,7 @@ ParseNode* parse_char_class(char** ptr, ParseNode* parent, bool inverted){
             char start = **ptr;
             char end = *(*ptr + 2);
             add_char_range(ic_ptr, start, end);
-            printf("%zX %zX\n", node->value.in_class[0], node->value.in_class[1]);
+            // printf("%zX %zX\n", node->value.in_class[0], node->value.in_class[1]);
             *ptr += 2;
         } else {
             add_char(ic_ptr, **ptr);

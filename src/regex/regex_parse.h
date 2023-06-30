@@ -21,6 +21,8 @@ typedef enum RegexRules {
     REPEAT_UNBOUNDED,
     CHAR_CLASS,
     INV_CHAR_CLASS,
+    WILDCARD,
+    ESCAPE,
     END
 } RegexRules;
 
@@ -28,6 +30,7 @@ typedef union NodeValue {
     char* str;
     size_t bounds[2];
     uint64_t in_class[4];
+    bool lazy;
 } NodeValue;
 
 typedef struct ParseNode {
@@ -44,6 +47,7 @@ ParseNode new_alternate(ParseNode* left, ParseNode* right, ParseNode* parent);
 ParseNode new_zero_or_more(ParseNode* child, ParseNode* parent);
 ParseNode new_literal(char* str, ParseNode* parent);
 ParseNode new_char_class(uint64_t allowed_chars[4], ParseNode* parent, bool inverted);
+ParseNode new_wildcard(ParseNode* parent);
 
 ParseNode* parse(char* regex);
 void free_parse_tree(ParseNode* tree);
