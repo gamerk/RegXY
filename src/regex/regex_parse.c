@@ -60,6 +60,57 @@ size_t parse_int(char** ptr){
     return out;
 }
 
+ParseNode* parse_repeat(char** ptr, ParseNode* child, ParseNode* parent){
+    char* token_ptr = *ptr;
+    
+    ParseNode* node = (ParseNode*)malloc(sizeof(ParseNode));
+    token_ptr++;
+    while (*token_ptr == ' ') token_ptr++;
+    ASSERT_NOT(!('0' <= *token_ptr && *token_ptr <= '9'), 
+                "Repeat lower bound must be a positive integer, but found the character '%c'", *token_ptr);
+
+    node->value.bounds[0] = parse_int(&token_ptr);
+    while (*token_ptr == ' ') token_ptr++;
+
+    ASSERT_NOT(*token_ptr != ',' && *token_ptr != '}', 
+                "Repeat lower bound must be a positive integer, but found the character '%c'", *token_ptr);
+    if (*token_ptr == '}'){
+        // Actually is REPEAT_CONST
+        node->type = REPEAT_CONST;
+    } else if (*token_ptr == ',' && *(token_ptr + 1) == '}'){
+        node->type = REPEAT_UNBOUNDED;
+        token_ptr++;
+    } else {
+        token_ptr++;
+        node->type = REPEAT_BOUNDED;
+        while (*token_ptr == ' ') token_ptr++;
+        node->value.bounds[1] = parse_int(&token_ptr);
+        while (*token_ptr == ' ') token_ptr++;
+        ASSERT_NOT(*token_ptr != '}', \
+                "Repeat upper bound must be a positive integer, but found the character '%c'", *token_ptr);
+    }
+
+    node->child_count = 1;
+    node->_child_arr_size = 1;
+    node->children = (ParseNode**)malloc(sizeof(ParseNode));
+    node->children[0] = child;
+
+    // Check lazy
+    if (*(token_ptr + 1) == '?'){
+        token_ptr++;
+        node->lazy = true;
+    } else {
+        node->lazy = false;
+    }
+
+    node->should_free_value = 0;
+    node->parent = parent;
+
+    *ptr = token_ptr;
+
+    return node;
+}
+
 ParseNode* parse(char* regex){
     char* token_ptr = regex;
 
@@ -181,9 +232,9 @@ ParseNode* parse(char* regex){
                 *node = new_quantifier(*(rules + 1), current->children[current->child_count - 1], current);
                 if (*(token_ptr + 1) == '?'){
                     token_ptr++;
-                    node->value.lazy = true;
+                    node->lazy = true;
                 } else {
-                    node->value.lazy = false;
+                    node->lazy = false;
                 }
                 current->children[current->child_count - 1]->parent = node;
                 current->children[current->child_count - 1] = node;
@@ -231,36 +282,7 @@ ParseNode* parse(char* regex){
                 break;
             }
             case REPEAT_CONST: {
-                ParseNode* node = (ParseNode*)malloc(sizeof(ParseNode));
-                token_ptr++;
-                node->value.bounds[0] = parse_int(&token_ptr);
-                while (*token_ptr == ' ') token_ptr++;
-
-                ASSERT_NOT(*token_ptr != ',' && *token_ptr != '}', 
-                            "Repeat lower bound must be a positive integer, but found the character '%c'", *token_ptr);
-                if (*token_ptr == '}'){
-                    // Actually is REPEAT_CONST
-                    node->type = REPEAT_CONST;
-                } else if (*token_ptr == ',' && *(token_ptr + 1) == '}'){
-                    node->type = REPEAT_UNBOUNDED;
-                    token_ptr++;
-                } else {
-                    token_ptr++;
-                    node->type = REPEAT_BOUNDED;
-                    while (*token_ptr == ' ') token_ptr++;
-                    node->value.bounds[1] = parse_int(&token_ptr);
-                    while (*token_ptr == ' ') token_ptr++;
-                    ASSERT_NOT(*token_ptr != '}', \
-                            "Repeat upper bound must be a positive integer, but found the character '%c'", *token_ptr);
-                }
-
-                node->child_count = 1;
-                node->_child_arr_size = 1;
-                node->children = (ParseNode**)malloc(sizeof(ParseNode));
-                node->children[0] = current->children[current->child_count - 1];
-
-                node->should_free_value = 0;
-                node->parent = current;
+                ParseNode* node = parse_repeat(&token_ptr, current->children[current->child_count - 1], current);
                 current->children[current->child_count - 1]->parent = node;
                 current->children[current->child_count - 1] = node;
                 break;
@@ -287,13 +309,21 @@ ParseNode* parse(char* regex){
 }
 
 void free_parse_tree(ParseNode* tree){
+    if (!tree){
+        fprintf(stderr, "Warning: Trying to free NULL tree\n");
+    }
     if (tree->value.str && tree->should_free_value){
         free(tree->value.str);
     }
     for (int i = 0; i < tree->child_count; i++){
+        if (!tree->children[i]){
+            fprintf(stderr, "Warning: Trying to free NULL child\n");
+        }
         free_parse_tree(tree->children[i]);
     }
-    free(tree->children);
+    if (tree->children){
+        free(tree->children);
+    }
     free(tree);
 }
 
@@ -311,13 +341,13 @@ void _print_parse_tree(ParseNode* tree, int indent){
             printf("Literal('%s')", tree->value.str);
             break;
         case ZERO_OR_MORE:
-            printf("Zero or more (lazy = %d)", tree->value.lazy);
+            printf("Zero or more (lazy = %d)", tree->lazy);
             break;
         case ZERO_OR_ONE:
-            printf("Zero or one (lazy = %d)", tree->value.lazy);
+            printf("Zero or one (lazy = %d)", tree->lazy);
             break;
         case ONE_OR_MORE:
-            printf("One or more (lazy = %d)", tree->value.lazy);
+            printf("One or more (lazy = %d)", tree->lazy);
             break;
         case ALTERNATE:
             printf("Alternate");
@@ -329,13 +359,13 @@ void _print_parse_tree(ParseNode* tree, int indent){
             printf("Group");
             break;
         case REPEAT_CONST:
-            printf("Const Repeat {%zd}", tree->value.bounds[0]);
+            printf("Const Repeat {%zd} (lazy = %d)", tree->value.bounds[0], tree->lazy);
             break;
         case REPEAT_BOUNDED:
-            printf("Bounded Repeat {%zd, %zd}", tree->value.bounds[0], tree->value.bounds[1]);
+            printf("Bounded Repeat {%zd, %zd} (lazy = %d)", tree->value.bounds[0], tree->value.bounds[1], tree->lazy);
             break;
         case REPEAT_UNBOUNDED:
-            printf("Unbounded Repeat {%zd, }", tree->value.bounds[0]);
+            printf("Unbounded Repeat {%zd, } (lazy = %d)", tree->value.bounds[0], tree->lazy);
             break;
         case INV_CHAR_CLASS:
         case CHAR_CLASS: {

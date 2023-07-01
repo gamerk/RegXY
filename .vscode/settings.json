@@ -4,6 +4,7 @@
         "regex": "cpp",
         "char_class.h": "c",
         "stdlib.h": "c",
-        "stdio.h": "c"
+        "stdio.h": "c",
+        "xutility": "c"
     }
 }

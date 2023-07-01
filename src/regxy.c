@@ -12,7 +12,7 @@
 
 int main(void){
 
-    ParseNode* tree = parse("/x61?? /+*|abc.df[^/w](456|7)");
+    ParseNode* tree = parse("[^/D/d]a{2}?bcd");
     print_parse_tree(tree);
     simplify_tree(tree);
     printf("-------------- After simplification ---------------\n");

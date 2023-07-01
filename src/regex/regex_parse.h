@@ -29,7 +29,6 @@ typedef union NodeValue {
     char* str;
     size_t bounds[2];
     uint64_t in_class[4];
-    bool lazy;
 } NodeValue;
 
 typedef struct ParseNode {
@@ -40,6 +39,7 @@ typedef struct ParseNode {
     size_t _child_arr_size;
     struct ParseNode* parent;
     char should_free_value;
+    bool lazy;
 } ParseNode;
 
 ParseNode new_alternate(ParseNode* left, ParseNode* right, ParseNode* parent);

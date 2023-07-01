@@ -12,4 +12,5 @@ void add_char_range(uint64_t (*allowed_chars)[4], char start, char end);
 void add_char_class(uint64_t (*dest)[4], uint64_t src[4]);
 void add_node(uint64_t (*allowed_chars)[4], ParseNode* node);
 bool contains_char(uint64_t allowed_chars[4], char c);
+bool is_empty(uint64_t allowed_chars[4]);
 #endif /* CHAR_CLASS_H */

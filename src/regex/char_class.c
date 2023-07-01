@@ -8,6 +8,16 @@
 #include <stdio.h>
 #include <string.h>
 
+bool is_empty(uint64_t allowed_chars[4]){
+    for (int i = 0; i < 4; i++){
+        if (allowed_chars[i]){
+            return false;
+        }
+    }
+
+    return true;
+}
+
 void add_char(uint64_t (*allowed_chars)[4], char c){
     (*allowed_chars)[(uint8_t)c >> 6] |= 1ULL << abs(c & 0b00111111);
 }
