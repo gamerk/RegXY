@@ -90,12 +90,12 @@ void simplify_tree(ParseNode* tree){
 
     Make array longer
     + Convert repetitions into quantifiers (e.g. a{1,2} -> aa{0,1}, a{2,} -> aaa*)
-    - Convert one-or-more quantifiers into zero-or-more quantifiers
+    + Convert one-or-more quantifiers into zero-or-more quantifiers
     - Split up alternations if possible
 
     In-place
     - Convert alternations of single characters into character classes
-    - Convert inverse character classes to just regular character classes
+    + Convert inverse character classes to just regular character classes
     */
 
 
@@ -175,6 +175,32 @@ void simplify_tree(ParseNode* tree){
                 } else {
                     temp_children[temp_child_size++] = child;
                 }
+
+                break;
+            }
+            case ONE_OR_MORE: {
+                ParseNode* node = (ParseNode*)malloc(sizeof(ParseNode));
+                *node = (ParseNode){
+                    .type = EXPR,
+                    .child_count = child->child_count + 1,
+                    ._child_arr_size = child->child_count + 1,
+                    .children = (ParseNode**)calloc(child->child_count + 1, sizeof(ParseNode*)),
+                    .lazy = child->lazy,
+                    .parent = tree,
+                    .should_free_value = false
+                };
+
+                ParseNode** children_copy = copy_children(child->children, child->child_count, node);
+                memcpy(&(node->children[0]), children_copy, child->child_count * sizeof(ParseNode*));
+
+                ParseNode* zom = (ParseNode*)malloc(sizeof(ParseNode));
+                *zom = new_quantifier(ZERO_OR_MORE, NULL, node);
+                zom->child_count = child->child_count;
+                zom->_child_arr_size = child->child_count;
+                zom->children = copy_children(child->children, child->child_count, zom);
+                node->children[child->child_count] = zom;
+
+                temp_children[temp_child_size++] = node;
 
                 break;
             }
