@@ -43,7 +43,7 @@ ParseNode new_char_class(uint64_t allowed_chars[4], ParseNode* parent, bool inve
                         ._child_arr_size = 0, 
                         .children = NULL,
                         .parent = parent,
-                        .should_free_value = 0, 
+                        .should_free_value = 0,
                         };
     
     memcpy(node.value.in_class, allowed_chars, sizeof(uint64_t) * 4);

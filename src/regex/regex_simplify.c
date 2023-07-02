@@ -18,6 +18,65 @@ void normalize_char_class(ParseNode* node){
     }
 }
 
+ParseNode** copy_children(ParseNode** children, size_t num_children, ParseNode* parent){
+    ParseNode** copy = (ParseNode**)calloc(num_children, sizeof(ParseNode*));
+
+    for (size_t i = 0; i < num_children; i++){
+        copy[i] = (ParseNode*)malloc(sizeof(ParseNode));
+        *copy[i] = *children[i];
+        if (copy[i]->should_free_value){
+            copy[i]->value.str = (char*)calloc(strlen(children[i]->value.str) + 1, sizeof(char));
+            strcpy(copy[i]->value.str, children[i]->value.str);
+        }
+    }
+
+    return copy;
+}
+
+ParseNode* expand_repeat(ParseNode** to_repeat, size_t tr_size, size_t num_required, size_t num_optional, bool bounded, bool lazy, ParseNode* parent){
+    ParseNode* node = (ParseNode*)malloc(sizeof(ParseNode));
+    ASSERT_NOT(!node, "Could not allocate node for repeat const!");
+
+    node->type = EXPR;
+    node->child_count = tr_size * (num_required + (num_optional || !bounded ? 1 : 0));
+    node->_child_arr_size = node->child_count;
+    node->children = (ParseNode**)calloc(node->_child_arr_size, sizeof(ParseNode*));
+    node->should_free_value = 0;
+    node->parent = parent;
+
+    ParseNode** new_to_repeat = copy_children(to_repeat, tr_size, node);
+
+    for (size_t i = 0; i < num_required; i += tr_size){
+        memcpy(&(node->children[i]), new_to_repeat, sizeof(ParseNode*) * tr_size);
+    }
+
+    if (num_optional || !bounded) {
+        ParseNode* final = (ParseNode*)malloc(sizeof(ParseNode));
+        if (!bounded){
+            *final = new_quantifier(ZERO_OR_MORE, NULL, node);
+            final->child_count = tr_size;
+            final->_child_arr_size = tr_size;
+            final->children = copy_children(to_repeat, tr_size, final);
+            final->lazy = lazy;
+        } else {
+            *final = (ParseNode){
+                .type = REPEAT_BOUNDED,
+                .child_count = tr_size,
+                ._child_arr_size = tr_size,
+                .children = copy_children(to_repeat, tr_size, final),
+                .lazy = lazy,
+                .value.bounds = {0, num_optional}
+            };
+        }
+        
+        printf("Final type: %d, bounded: %d\n", final->type, bounded);
+        node->children[node->child_count - 1] = final;
+    }
+
+    return node;
+
+}
+
 void simplify_tree(ParseNode* tree){
 
     if (!tree) return;
@@ -30,7 +89,7 @@ void simplify_tree(ParseNode* tree){
     + Merge literals
 
     Make array longer
-    - Convert repetitions into quantifiers (e.g. a{1,2} -> aa?, a{2,} -> aaa*)
+    + Convert repetitions into quantifiers (e.g. a{1,2} -> aa{0,1}, a{2,} -> aaa*)
     - Convert one-or-more quantifiers into zero-or-more quantifiers
     - Split up alternations if possible
 
@@ -88,25 +147,38 @@ void simplify_tree(ParseNode* tree){
                 break;
             }
             case REPEAT_CONST: {
-                ParseNode* node = (ParseNode*)malloc(sizeof(ParseNode));
-                ASSERT_NOT(!node, "Could not allocate node for repeat const!");
-                ASSERT_NOT(!child, "child is null!");
-                node->type = EXPR;
-                node->child_count = child->child_count * child->value.bounds[0];
-                node->_child_arr_size = node->child_count;
-                node->children = (ParseNode**)calloc(node->_child_arr_size, sizeof(ParseNode*));
-                node->should_free_value = 0;
-
-                for (size_t i = 0; i < node->child_count; i += child->child_count){
-                    memcpy(&(node->children[i]), child->children, sizeof(ParseNode*) * child->child_count);
-                }
-
-                // free(child->children);
-                // free(child);
-                temp_children[temp_child_size++] = node;
+                
+                temp_children[temp_child_size++] = expand_repeat(child->children, child->child_count, child->value.bounds[0], 
+                                                        0, true, child->lazy, tree);
+                free_parse_tree(child);
 
                 break;
             }
+            case REPEAT_BOUNDED: {
+                
+                if (child->value.bounds[0] != 0){
+                    temp_children[temp_child_size++] = expand_repeat(child->children, child->child_count, child->value.bounds[0], 
+                                                        child->value.bounds[1], true, child->lazy, tree);
+                    free_parse_tree(child);
+                } else {
+                    temp_children[temp_child_size++] = child;
+                }
+
+                break;
+            }
+            case REPEAT_UNBOUNDED: {
+                
+                if (child->value.bounds[0] != 0){
+                    temp_children[temp_child_size++] = expand_repeat(child->children, child->child_count, child->value.bounds[0], 
+                                                        0, false, child->lazy, tree);
+                    free_parse_tree(child);
+                } else {
+                    temp_children[temp_child_size++] = child;
+                }
+
+                break;
+            }
+
             default:
                 temp_children[temp_child_size++] = child;
                 break;

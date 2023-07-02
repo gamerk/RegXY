@@ -7,7 +7,7 @@
 #define ESCAPE_CHR '/'
 
 typedef enum RegexRules {
-    LITERAL,
+    LITERAL = 1,
     ZERO_OR_MORE,
     ONE_OR_MORE,
     ZERO_OR_ONE,
@@ -43,7 +43,7 @@ typedef struct ParseNode {
 } ParseNode;
 
 ParseNode new_alternate(ParseNode* left, ParseNode* right, ParseNode* parent);
-ParseNode new_zero_or_more(ParseNode* child, ParseNode* parent);
+ParseNode new_quantifier(RegexRules type, ParseNode* child, ParseNode* parent);
 ParseNode new_literal(char* str, ParseNode* parent);
 ParseNode new_char_class(uint64_t allowed_chars[4], ParseNode* parent, bool inverted);
 ParseNode new_wildcard(ParseNode* parent);
