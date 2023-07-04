@@ -12,7 +12,7 @@
 
 int main(void){
 
-    ParseNode* tree = parse("[^/D/d]a{2,}?bcd+");
+    ParseNode* tree = parse("a+|bc|c");
     print_parse_tree(tree);
     simplify_tree(tree);
     printf("-------------- After simplification ---------------\n");

@@ -91,10 +91,10 @@ void simplify_tree(ParseNode* tree){
     Make array longer
     + Convert repetitions into quantifiers (e.g. a{1,2} -> aa{0,1}, a{2,} -> aaa*)
     + Convert one-or-more quantifiers into zero-or-more quantifiers
-    - Split up alternations if possible
+    ? Split up alternations if possible
 
     In-place
-    - Convert alternations of single characters into character classes
+    ? Convert alternations of single characters into character classes
     + Convert inverse character classes to just regular character classes
     */
 
@@ -217,9 +217,10 @@ void simplify_tree(ParseNode* tree){
     bool has_exprs = false;
     for (size_t i = 0; i < temp_child_size; i++){
         simplify_tree(temp_children[i]);
-        if (temp_children[i]->type == EXPR){
+        if (temp_children[i]->type == EXPR && (tree->type != ALTERNATE || temp_children[i]->child_count == 1)
+            || temp_children[i]->type == ALTERNATE && tree->type == ALTERNATE){
             new_child_size += temp_children[i]->child_count;
-            has_exprs = true;
+            has_exprs = true; 
         } else {
             new_child_size += 1;
         }
@@ -229,9 +230,11 @@ void simplify_tree(ParseNode* tree){
     size_t new_child_pos = 0;
 
     for (size_t i = 0; i < temp_child_size; i++){
-        if (temp_children[i]->type == EXPR){
+        if (temp_children[i]->type == EXPR && (tree->type != ALTERNATE || temp_children[i]->child_count == 1)
+            || temp_children[i]->type == ALTERNATE && tree->type == ALTERNATE){
             memcpy(&(new_children[new_child_pos]), temp_children[i]->children, sizeof(ParseNode*) * temp_children[i]->child_count);
             new_child_pos += temp_children[i]->child_count;
+
         } else {
             new_children[new_child_pos] = temp_children[i];
             new_child_pos += 1;
@@ -244,7 +247,7 @@ void simplify_tree(ParseNode* tree){
     tree->_child_arr_size = new_child_size;
     tree->child_count = new_child_size;
 
-    if (has_exprs){
+    if (has_exprs && tree->type != ALTERNATE){
         // Check if expanded expressions simplify any more
         simplify_tree(tree);
     }
