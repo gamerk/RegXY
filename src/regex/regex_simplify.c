@@ -23,11 +23,28 @@ ParseNode** copy_children(ParseNode** children, size_t num_children, ParseNode* 
 
     for (size_t i = 0; i < num_children; i++){
         copy[i] = (ParseNode*)malloc(sizeof(ParseNode));
-        *copy[i] = *children[i];
+        copy[i] = copy_tree(children[i]);
+
         if (copy[i]->should_free_value){
             copy[i]->value.str = (char*)calloc(strlen(children[i]->value.str) + 1, sizeof(char));
             strcpy(copy[i]->value.str, children[i]->value.str);
         }
+    }
+
+    return copy;
+}
+
+ParseNode* copy_tree(ParseNode* node){
+    ParseNode* copy = (ParseNode*)malloc(sizeof(ParseNode));
+    *copy = *node;
+
+    if (node->should_free_value){
+        copy->value.str = (char*)calloc(strlen(node->value.str) + 1, sizeof(char));
+        strcpy(copy->value.str, node->value.str);
+    }
+
+    if (node->_child_arr_size){
+        copy->children = copy_children(node->children, node->child_count, copy);
     }
 
     return copy;
@@ -38,7 +55,7 @@ ParseNode* expand_repeat(ParseNode** to_repeat, size_t tr_size, size_t num_requi
     ASSERT_NOT(!node, "Could not allocate node for repeat const!");
 
     node->type = EXPR;
-    node->child_count = tr_size * (num_required + (num_optional || !bounded ? 1 : 0));
+    node->child_count = (tr_size * num_required) + (bounded ? num_optional : 1);
     node->_child_arr_size = node->child_count;
     node->children = (ParseNode**)calloc(node->_child_arr_size, sizeof(ParseNode*));
     node->should_free_value = 0;
@@ -46,32 +63,36 @@ ParseNode* expand_repeat(ParseNode** to_repeat, size_t tr_size, size_t num_requi
 
     ParseNode** new_to_repeat = copy_children(to_repeat, tr_size, node);
 
-    for (size_t i = 0; i < num_required; i += tr_size){
+    for (size_t i = 0; i < num_required * tr_size; i += tr_size){
         memcpy(&(node->children[i]), new_to_repeat, sizeof(ParseNode*) * tr_size);
     }
 
-    if (num_optional || !bounded) {
+        
+    if (!bounded){
         ParseNode* final = (ParseNode*)malloc(sizeof(ParseNode));
-        if (!bounded){
-            *final = new_quantifier(ZERO_OR_MORE, NULL, node);
-            final->child_count = tr_size;
-            final->_child_arr_size = tr_size;
-            final->children = copy_children(to_repeat, tr_size, final);
-            final->lazy = lazy;
-        } else {
-            *final = (ParseNode){
-                .type = REPEAT_BOUNDED,
+        *final = new_quantifier(ZERO_OR_MORE, NULL, node);
+        final->child_count = tr_size;
+        final->_child_arr_size = tr_size;
+        final->children = copy_children(to_repeat, tr_size, final);
+        final->lazy = lazy;
+        node->children[node->child_count - 1] = final;
+    } else if (num_optional) {
+
+        for (size_t i = num_required * tr_size; i < node->child_count; i++){
+            ParseNode* zoo = (ParseNode*)malloc(sizeof(ParseNode));
+            *zoo = (ParseNode){
+                .type = ZERO_OR_ONE,
                 .child_count = tr_size,
                 ._child_arr_size = tr_size,
-                .children = copy_children(to_repeat, tr_size, final),
+                .children = copy_children(to_repeat, tr_size, zoo),
                 .lazy = lazy,
-                .value.bounds = {0, num_optional}
+                .should_free_value = 0,
             };
+            node->children[i] = zoo;
         }
-        
-        printf("Final type: %d, bounded: %d\n", final->type, bounded);
-        node->children[node->child_count - 1] = final;
     }
+    
+    
 
     return node;
 
@@ -86,11 +107,12 @@ void simplify_tree(ParseNode* tree){
 
     Make array shorter
     + Remove empty char classes (they exist)
-    + Merge literals
+    + Merge literals (unless in alternations)
 
     Make array longer
     + Convert repetitions into quantifiers (e.g. a{1,2} -> aa{0,1}, a{2,} -> aaa*)
     + Convert one-or-more quantifiers into zero-or-more quantifiers
+    + Expand alternations within alternations
     ? Split up alternations if possible
 
     In-place
@@ -121,6 +143,11 @@ void simplify_tree(ParseNode* tree){
                 }
                 break;
             case LITERAL: {
+                if (tree->type == ALTERNATE) {
+                    temp_children[temp_child_size++] = child;
+                    break;
+                }
+
                 size_t literal_length = 0;
                 ASSERT_NOT(!tree->children[i], "Child does not exist\n");
                 for (size_t index = i; index < tree->child_count && tree->children[index]->type == LITERAL; index++){
@@ -150,7 +177,7 @@ void simplify_tree(ParseNode* tree){
                 
                 temp_children[temp_child_size++] = expand_repeat(child->children, child->child_count, child->value.bounds[0], 
                                                         0, true, child->lazy, tree);
-                free_parse_tree(child);
+                // free_parse_tree(child);
 
                 break;
             }
@@ -158,8 +185,9 @@ void simplify_tree(ParseNode* tree){
                 
                 if (child->value.bounds[0] != 0){
                     temp_children[temp_child_size++] = expand_repeat(child->children, child->child_count, child->value.bounds[0], 
-                                                        child->value.bounds[1], true, child->lazy, tree);
-                    free_parse_tree(child);
+                                                        child->value.bounds[1] - child->value.bounds[0],
+                                                        true, child->lazy, tree);
+                    // free_parse_tree(child);
                 } else {
                     temp_children[temp_child_size++] = child;
                 }
@@ -171,7 +199,7 @@ void simplify_tree(ParseNode* tree){
                 if (child->value.bounds[0] != 0){
                     temp_children[temp_child_size++] = expand_repeat(child->children, child->child_count, child->value.bounds[0], 
                                                         0, false, child->lazy, tree);
-                    free_parse_tree(child);
+                    // free_parse_tree(child);
                 } else {
                     temp_children[temp_child_size++] = child;
                 }
@@ -216,7 +244,6 @@ void simplify_tree(ParseNode* tree){
     size_t new_child_size = 0;
     bool has_exprs = false;
     for (size_t i = 0; i < temp_child_size; i++){
-        simplify_tree(temp_children[i]);
         if (temp_children[i]->type == EXPR && (tree->type != ALTERNATE || temp_children[i]->child_count == 1)
             || temp_children[i]->type == ALTERNATE && tree->type == ALTERNATE){
             new_child_size += temp_children[i]->child_count;
@@ -230,6 +257,7 @@ void simplify_tree(ParseNode* tree){
     size_t new_child_pos = 0;
 
     for (size_t i = 0; i < temp_child_size; i++){
+        simplify_tree(temp_children[i]);
         if (temp_children[i]->type == EXPR && (tree->type != ALTERNATE || temp_children[i]->child_count == 1)
             || temp_children[i]->type == ALTERNATE && tree->type == ALTERNATE){
             memcpy(&(new_children[new_child_pos]), temp_children[i]->children, sizeof(ParseNode*) * temp_children[i]->child_count);
@@ -247,7 +275,7 @@ void simplify_tree(ParseNode* tree){
     tree->_child_arr_size = new_child_size;
     tree->child_count = new_child_size;
 
-    if (has_exprs && tree->type != ALTERNATE){
+    if (has_exprs){
         // Check if expanded expressions simplify any more
         simplify_tree(tree);
     }

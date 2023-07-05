@@ -311,20 +311,22 @@ ParseNode* parse(char* regex){
 void free_parse_tree(ParseNode* tree){
     if (!tree){
         fprintf(stderr, "Warning: Trying to free NULL tree\n");
+        return;
     }
     if (tree->value.str && tree->should_free_value){
         free(tree->value.str);
     }
-    for (int i = 0; i < tree->child_count; i++){
-        if (!tree->children[i]){
-            fprintf(stderr, "Warning: Trying to free NULL child\n");
-        }
-        free_parse_tree(tree->children[i]);
-    }
     if (tree->children){
+        for (int i = 0; i < tree->child_count; i++){
+            if (!tree->children[i]){
+                fprintf(stderr, "Warning: Trying to free NULL child\n");
+                continue;
+            }
+            free_parse_tree(tree->children[i]);
+        }
         free(tree->children);
     }
-    free(tree);
+    if (tree) free(tree);
 }
 
 void _print_parse_tree(ParseNode* tree, int indent){
@@ -393,7 +395,7 @@ void _print_parse_tree(ParseNode* tree, int indent){
             break;
     }
 
-    printf("\n");
+    printf(" (@%zX)\n", tree);
 
     for (int i = 0; i < tree->child_count; i++){
         // for (int i = 0; i < indent; i++){

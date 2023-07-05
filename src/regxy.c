@@ -12,10 +12,10 @@
 
 int main(void){
 
-    ParseNode* tree = parse("a+|bc|c");
+    ParseNode* tree = parse("(a|b){1,5}");
     print_parse_tree(tree);
-    simplify_tree(tree);
     printf("-------------- After simplification ---------------\n");
+    simplify_tree(tree);
     print_parse_tree(tree);
     free_parse_tree(tree);
 
