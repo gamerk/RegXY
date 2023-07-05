@@ -6,13 +6,13 @@
 #include <time.h>
 
 // gcc src/*.c src/*.h src/regex/*.c src/regex/*.h -ggdb && a.exe
-// cl src/*.c src/regex/*.c /Zi && regxy.exe
+// cl src/*.c src/regex/*.c /Zi && drmemory regxy.exe
 
 #define PrintRange(s, start, end) {for (int _I = ((start >= 0) ? start : 0); _I < end && s[_I]; _I++) fputc(s[_I], stdout); fputc('\n', stdout);}
 
 int main(void){
 
-    ParseNode* tree = parse("(a|b){1,5}");
+    ParseNode* tree = parse("a{2,5}");
     print_parse_tree(tree);
     printf("-------------- After simplification ---------------\n");
     simplify_tree(tree);

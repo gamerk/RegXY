@@ -31,7 +31,7 @@ char* fread_all(const char* filename){
 
 char* str_replaced(const char* s, size_t start, size_t end, const char* repl){
 
-    ASSERT_NOT(start > end, "Cannot replace range from %d to %d: start must be less than end", start, end);
+    ASSERT_NOT(start > end, "Cannot replace range from %zd to %zd: start must be less than end", start, end);
 
     size_t new_size = strlen(s) + (strlen(repl) - (end - start));
     char* new_s = calloc(new_size + 1, sizeof(char));
@@ -78,7 +78,7 @@ char* str_multi_replace(const char* s, Repl repls[], size_t count, int is_sorted
                 if (&repls[i] == ordered[j]) continue;
 
                 ASSERT_NOT(repls[i].start < ordered[j]->end && repls[i].end > ordered[j]->start, 
-                        "Replacements cannot overlap: (%d-%d -> '%s') and (%d-%d -> '%s')", 
+                        "Replacements cannot overlap: (%zd-%zd -> '%s') and (%zd-%zd -> '%s')", 
                         repls[i].start, repls[i].end, repls[i].repl,
                         ordered[j]->start, ordered[j]->end, ordered[j]->repl);
 

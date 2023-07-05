@@ -227,7 +227,7 @@ ParseNode* parse(char* regex){
             case ZERO_OR_ONE:
             case ONE_OR_MORE:
             case ZERO_OR_MORE: {
-                ASSERT_NOT(current->child_count == 0, "Quantifier at postion %d must be preceded by another expression", token_ptr - regex);
+                ASSERT_NOT(current->child_count == 0, "Quantifier at postion %lld must be preceded by another expression", token_ptr - regex);
                 ParseNode* node = malloc(sizeof(ParseNode));
                 *node = new_quantifier(*(rules + 1), current->children[current->child_count - 1], current);
                 if (*(token_ptr + 1) == '?'){
@@ -313,9 +313,6 @@ void free_parse_tree(ParseNode* tree){
         fprintf(stderr, "Warning: Trying to free NULL tree\n");
         return;
     }
-    if (tree->value.str && tree->should_free_value){
-        free(tree->value.str);
-    }
     if (tree->children){
         for (int i = 0; i < tree->child_count; i++){
             if (!tree->children[i]){
@@ -326,7 +323,24 @@ void free_parse_tree(ParseNode* tree){
         }
         free(tree->children);
     }
-    if (tree) free(tree);
+    if (tree->should_free_value && tree->value.str){
+        free(tree->value.str);
+    }
+    free(tree);
+}
+
+void free_tree_not_children(ParseNode* tree){
+    if (!tree){
+        fprintf(stderr, "Warning: Trying to free NULL tree\n");
+        return;
+    }
+    if (tree->should_free_value && tree->value.str){
+        free(tree->value.str);
+    }
+    if (tree->children){
+        free(tree->children);
+    }
+    free(tree);
 }
 
 void _print_parse_tree(ParseNode* tree, int indent){

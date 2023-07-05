@@ -50,6 +50,7 @@ ParseNode new_wildcard(ParseNode* parent);
 
 ParseNode* parse(char* regex);
 void free_parse_tree(ParseNode* tree);
+void free_tree_not_children(ParseNode* tree);
 void _print_parse_tree(ParseNode* tree, int indent);
 void print_parse_tree(ParseNode* tree);
 size_t parse_int(char** ptr);
