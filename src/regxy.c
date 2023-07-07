@@ -12,8 +12,10 @@
 
 int main(void){
 
-    ParseNode* tree = parse("a{2,5}");
+    ParseNode* tree = parse("(a(a)(a))(a)(aa(((a))))");
     print_parse_tree(tree);
+    size_t groups = label_groups(tree);
+    printf("Found %zu groups\n", groups);
     printf("-------------- After simplification ---------------\n");
     simplify_tree(tree);
     print_parse_tree(tree);

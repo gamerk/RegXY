@@ -372,7 +372,7 @@ void _print_parse_tree(ParseNode* tree, int indent){
             printf("Expression");
             break;
         case GROUP:
-            printf("Group");
+            printf("Group #%zu", tree->value.group_num);
             break;
         case REPEAT_CONST:
             printf("Const Repeat {%zd} (lazy = %d)", tree->value.bounds[0], tree->lazy);

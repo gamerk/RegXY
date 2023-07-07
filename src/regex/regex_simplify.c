@@ -252,9 +252,9 @@ void simplify_tree(ParseNode* tree){
     size_t new_child_size = 0;
     bool has_exprs = false;
     for (size_t i = 0; i < temp_child_size; i++){
+        simplify_tree(temp_children[i]);
         if (temp_children[i]->type == EXPR && (tree->type != ALTERNATE || temp_children[i]->child_count == 1)
             || temp_children[i]->type == ALTERNATE && tree->type == ALTERNATE){
-            simplify_tree(temp_children[i]);
             new_child_size += temp_children[i]->child_count;
             has_exprs = true; 
         } else {
@@ -293,6 +293,23 @@ void simplify_tree(ParseNode* tree){
         tree->_child_arr_size = temp_child_size;
         tree->child_count = temp_child_size;
     }
-    print_parse_tree(tree);
+    // print_parse_tree(tree);
 
+}
+
+size_t label_groups(ParseNode* tree){
+    size_t group_num = 1;
+    _label_groups(tree, &group_num);
+    return group_num;
+}
+
+void _label_groups(ParseNode* tree, size_t* gnum){
+    if (tree->type == GROUP){
+        tree->value.group_num = *gnum;
+        *gnum += 1;
+    }
+
+    for (size_t i = 0; i < tree->child_count; i++){
+        _label_groups(tree->children[i], gnum);
+    }
 }

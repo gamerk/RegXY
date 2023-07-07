@@ -29,6 +29,7 @@ typedef union NodeValue {
     char* str;
     size_t bounds[2];
     uint64_t in_class[4];
+    size_t group_num;
 } NodeValue;
 
 typedef struct ParseNode {
